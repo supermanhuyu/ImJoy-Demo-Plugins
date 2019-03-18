@@ -25,39 +25,67 @@
 import numpy as np
 import random
 import time
+import os
+from multiprocessing import Queue, Pool, Process
+import threading
+os.chdir("./faceid")
+from face import facefile_detection, facefile_compare
+# from HTTPServer import http_server_start, http_server_stop
+http_server = "http://facefiles.sg-ai.com/"
+# http_server = "http://192.168.199.107:8000/"
+
 class ImJoyPlugin():
     def setup(self):
         print('setup in python')
 
-    async def run(self, my):
-        print('hello world.')
-
+    def run(self):
+        print('starting server ... ')
 
     # 人脸检测
-    async def predict (self, list):
+    async def predict(self, list):
+        output_dir = "data/result/"
         res = []
+        print("list:", list)
+
         for item in list:
             print(item)
-            res.append({'IOU': random.random(), 'fileName': item.filename, 'predictUrl': item.url, 'message': ''})
+            result_file = facefile_detection(image_name=item.filename, image_path=item.path, output_dir=output_dir)
+            print("result_file:", result_file)
+            if result_file:
+                res.append({'IOU': random.random(), 'fileName': item.filename, 'predictUrl': http_server + result_file,
+                            'message': ''})
+            else:
+                res.append({'IOU': random.random(), 'fileName': item.filename, 'predictUrl': http_server + result_file,
+                            'message': '不存在人脸'})
 
         print(res)
-        time.sleep(3)
         return res
 
     # 1:1 人脸核验
-    async def predictII (self, args):
+    def predictII(self, args):
         print(args)
-        win = await api.createWindow({
+        data_queue = Queue(maxsize=10)
+        p = Process(target=facefile_compare, args=(data_queue, args[0]["path"]))
+        p.daemon = True
+        p.start()
+
+        first_res = data_queue.get()
+        print("first_res:", first_res)
+        win = api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
-            'w':10, 'h':10,
-            'data':{'ID': 0, 'flag': '是', 'time': '0s'}
+            'w': 10, 'h': 10,
+            'data': {'ID': first_res[0], 'flag': first_res[1], 'time': first_res[2]}
         })
-        i = 1
-        while i <= 1000:
-            win.run({'function': 'FunctionII', 'data':{'ID': i, 'flag': '是', 'time': '0.01s'}})
-            i += 1
-        return '1'
+
+        while True:
+            try:
+                result = data_queue.get(timeout=10)
+                print("result:", result)
+                win.run({'function': 'FunctionII', 'data': {'ID': result[0], 'flag': result[1], 'time': result[2]}})
+            except:
+                break
+        return True
 
         
     # 1:n人脸识别 导入底库
