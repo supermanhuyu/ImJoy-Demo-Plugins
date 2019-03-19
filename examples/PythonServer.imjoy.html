@@ -1,5 +1,5 @@
 ﻿<docs lang="markdown">
-[TODO: write documentation for this plugin.]
+Describe your plugin here.
 </docs>
 
 <config lang="json">
@@ -17,22 +17,27 @@
   "icon": "extension",
   "env": "",
   "requirements": [],
-  "dependencies": ["gywgithub/ImJoy-Demo-Plugins:ResultWindow"]
+  "dependencies": ["supermanhuyu/ImJoy-Demo-Plugins:ResultWindow"]
 }
 </config>
 
 <script lang="python">
-import numpy as np
-import random
-import time
 import os
+import time
+import random
+import numpy as np
+import tensorflow as tf
 from multiprocessing import Queue, Pool, Process
-import threading
+import h5py
+
 os.chdir("./faceid")
-from face import facefile_detection, facefile_compare
-# from HTTPServer import http_server_start, http_server_stop
+import facenet
+import detect_face
+from timer import Timer
+from face import facefile_detection, single_compare, single_recognition
+model_file = "models/models.pb"
+emb_h5 = "models/embeddings.h5"
 http_server = "http://facefiles.sg-ai.com/"
-# http_server = "http://192.168.199.107:8000/"
 
 class ImJoyPlugin():
     def setup(self):
@@ -45,116 +50,184 @@ class ImJoyPlugin():
     async def predict(self, list):
         output_dir = "data/result/"
         res = []
-        print("list:", list)
-
         for item in list:
             print(item)
-            result_file = facefile_detection(image_name=item.filename, image_path=item.path, output_dir=output_dir)
-            print("result_file:", result_file)
+            result_file = facefile_detection(image_name=item["filename"], image_path=item["path"], output_dir=output_dir)
             if result_file:
-                res.append({'IOU': random.random(), 'fileName': item.filename, 'predictUrl': http_server + result_file,
+                res.append({'IOU': random.random(), 'fileName': item["filename"], 'predictUrl': http_server + result_file,
                             'message': ''})
             else:
-                res.append({'IOU': random.random(), 'fileName': item.filename, 'predictUrl': http_server + result_file,
+                res.append({'IOU': random.random(), 'fileName': item["filename"], 'predictUrl': http_server + result_file,
                             'message': '不存在人脸'})
 
         print(res)
         return res
 
     # 1:1 人脸核验
-    def predictII(self, args):
+    async def predictII(self, args):
         print(args)
-        data_queue = Queue(maxsize=10)
-        p = Process(target=facefile_compare, args=(data_queue, args[0]["path"]))
-        p.daemon = True
-        p.start()
+        input_dir = args[0]["path"]
+        detect_timer = Timer()
+        # win = await api.createWindow({
+        #     'name': 'ResultWindow',
+        #     'type': 'ResultWindow',
+        #     'w': 10, 'h': 10,
+        #     'data': {'ID': 0, 'flag': '是', 'time': '0s'}})
 
-        first_res = data_queue.get()
-        print("first_res:", first_res)
-        win = api.createWindow({
-            'name': 'ResultWindow',
-            'type': 'ResultWindow',
-            'w': 10, 'h': 10,
-            'data': {'ID': first_res[0], 'flag': first_res[1], 'time': first_res[2]}
-        })
+        with tf.Graph().as_default():
+            # Load the model
+            facenet.load_model(model_file)
+            # Get input and output tensors
+            images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
+            embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+            phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
 
-        while True:
-            try:
-                result = data_queue.get(timeout=10)
-                print("result:", result)
-                win.run({'function': 'FunctionII', 'data': {'ID': result[0], 'flag': result[1], 'time': result[2]}})
-            except:
-                break
+            sess = tf.Session()
+            with sess.as_default():
+                pnet, rnet, onet = detect_face.create_mtcnn(sess, None)
+            compare_dirs = os.listdir(input_dir)
+
+            win = await api.createWindow({
+                'name': 'ResultWindow',
+                'type': 'ResultWindow',
+                'w': 10, 'h': 10,
+                'data': {'ID': 0, 'flag': '是', 'time': '0s'}})
+            for compare_dir in compare_dirs:
+                image_files = os.listdir(os.path.join(input_dir, compare_dir))
+                detect_timer.tic()
+                dist = single_compare(input_dir, compare_dir, image_files,
+                               pnet, rnet, onet, images_placeholder, embeddings, phase_train_placeholder, sess)
+
+                detect_timer.toc()
+
+                if dist < 0.85:
+                    flag = "是"
+                else:
+                    flag = "否"
+                # print('ID:', compare_dir, "dist:", dist, "flag:", flag, "time:", detect_timer.diff)
+                win.run({
+                        'function': 'FunctionII',
+                        'data': {'ID': compare_dir, 'flag': flag, 'time': detect_timer.diff}})
         return True
 
-        
+
     # 1:n人脸识别 导入底库
-    async def importNegative (self, args):
+    async def importNegative(self, args):
         print('importNegative: ', args)
         time.sleep(2)
         return 'ok'
 
     # 1:n人脸识别 预测
-    async def predictIII (self, args):
+    async def predictIII(self, args):
         print(args)
-        win = await api.createWindow({
-            'name': 'ResultWindow',
-            'type': 'ResultWindow',
-            'w':10, 'h':10,
-            'data':{'fileName': '', 'flag': '是', 'time': '0s', 'message': ''}
-        })
-        i = 1
-        while i <= 1000:
-            win.run({'function': 'FunctionIII', 'data':{'fileName': 'cat.jpg', 'flag': '是', 'time': '0.01s', 'message': '没有人脸'}})
-            i += 1
+        input_dir = args[0]["path"]
+        output_dir = "data/result/"
+        detect_timer = Timer()
+
+        f = h5py.File(emb_h5, 'r')
+        class_arr = f['class_name'][:]
+        class_name = [k.decode() for k in class_arr]
+        emb_arr = f['embeddings'][:]
+        # print("class_name: ", class_name)
+
+        with tf.Graph().as_default():
+            # Load the model
+            facenet.load_model(model_file)
+            # Get input and output tensors
+            images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
+            embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+            phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
+
+            sess = tf.Session()
+            with sess.as_default():
+                pnet, rnet, onet = detect_face.create_mtcnn(sess, None)
+
+            win = await api.createWindow({
+                'name': 'ResultWindow',
+                'type': 'ResultWindow',
+                'w': 10, 'h': 10,
+                'data': {'fileName': '', 'flag': '是', 'time': '0s', 'message': ''}
+            })
+
+            image_files = os.listdir(input_dir)
+            for img in image_files:
+                detect_timer.tic()
+                save_img, img_id = single_recognition(input_dir, img, output_dir, emb_arr, class_name,
+                                                      pnet, rnet, onet,
+                                                      images_placeholder, embeddings, phase_train_placeholder, sess)
+
+                detect_timer.toc()
+
+                flag = "是"
+                message = ""
+                if save_img == "none":
+                    flag = "否"
+                    message = "没有人脸"
+                elif img_id == "none":
+                    flag = "否"
+
+                data_dict = {'fileName': img,
+                             'flag': flag,
+                             'time': detect_timer.diff,
+                             'id': img_id,
+                             'url': http_server+save_img,
+                             'message': message}
+                print(data_dict)
+                win.run({'function': 'FunctionIII', 'data': data_dict})
         return '1'
 
-
-
     # 关键点检测
-    async def predictIV (self, args):
+    async def predictIV(self, args):
         print(args)
         win = await api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
-            'w':10, 'h':10,
-            'data':{'fileName': '', 'keyPoint': ''}
+            'w': 10, 'h': 10,
+            'data': {'fileName': '', 'keyPoint': ''}
         })
         i = 1
         while i <= 1000:
-            win.run({'function': 'FunctionIV', 'data':{'fileName': 'cat.jpg', 'keyPoint': '[{x: 1, y: 1}, {x2: 2, y2: 2}]'}})
+            win.run({'function': 'FunctionIV',
+                     'data': {'fileName': 'cat.jpg', 'keyPoint': '[{x: 1, y: 1}, {x2: 2, y2: 2}]'}})
             i += 1
         return '1'
 
     # 活体检测
-    async def predictV (self, args):
+    async def predictV(self, args):
         print(args)
         win = await api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
-            'w':10, 'h':10,
-            'data':{'fileName': '', 'flag': ''}
+            'w': 10, 'h': 10,
+            'data': {'fileName': '', 'flag': ''}
         })
         i = 1
         while i <= 1000:
-            win.run({'function': 'FunctionV', 'data':{'fileName': 'cat.jpg', 'flag': '否'}})
+            win.run({'function': 'FunctionV', 'data': {'fileName': 'cat.jpg', 'flag': '否'}})
             i += 1
         return '1'
 
     # 图像质量检测
-    async def predictVI (self, args):
+    async def predictVI(self, args):
         print(args)
         win = await api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
-            'w':10, 'h':10,
-            'data':{'fileName': '', 'message': ''}
+            'w': 10, 'h': 10,
+            'data': {'fileName': '', 'message': ''}
         })
         i = 1
         while i <= 25:
-            win.run({'function': 'FunctionVI', 'data':{'fileName': 'cat.jpg', 'message': '图像模糊,详细描述...'}})
+            win.run({'function': 'FunctionVI', 'data': {'fileName': 'cat.jpg', 'message': '图像模糊,详细描述...'}})
             i += 1
         return '1'
+
+
+    def exit(self):
+        print('aborting servers...')
+        # self.upload_server_stop()
+        print('aborted...')
+
 
 api.export(ImJoyPlugin())
 </script>
