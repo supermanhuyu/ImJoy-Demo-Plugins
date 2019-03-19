@@ -36,12 +36,11 @@ import tensorflow as tf
 from keras.models import load_model
 from multiprocessing import Queue, Pool, Process
 import h5py
-
-os.chdir("./faceid")
-import facenet
-import detect_face
-from timer import Timer
-from face import facefile_detection, single_compare, single_recognition, baseid_import, alive_detection
+// os.chdir("./faceid")
+from faceid import facenet
+from faceid import detect_face
+from faceid.timer import Timer
+from faceid.face import facefile_detection, single_compare, single_recognition, baseid_import, alive_detection
 model_file = "models/models.pb"
 emb_h5 = "models/embeddings.h5"
 face_vgg = "models/face_vgg16.h5"
