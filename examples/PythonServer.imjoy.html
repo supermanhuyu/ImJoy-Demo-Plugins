@@ -34,10 +34,11 @@ os.chdir("./faceid")
 import facenet
 import detect_face
 from timer import Timer
-from face import facefile_detection, single_compare, single_recognition
+from face import facefile_detection, single_compare, single_recognition, baseid_import
 model_file = "models/models.pb"
 emb_h5 = "models/embeddings.h5"
 http_server = "http://facefiles.sg-ai.com/"
+# http_server = "http://192.168.199.107:8000/"
 
 class ImJoyPlugin():
     def setup(self):
@@ -113,9 +114,8 @@ class ImJoyPlugin():
 
     # 1:n人脸识别 导入底库
     async def importNegative(self, args):
-        print('importNegative: ', args)
-        time.sleep(2)
-        return 'ok'
+        print('data path:', args[0]["path"])
+        return baseid_import(args[0]["path"])
 
     # 1:n人脸识别 预测
     async def predictIII(self, args):
