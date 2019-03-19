@@ -27,6 +27,7 @@ import time
 import random
 import numpy as np
 import tensorflow as tf
+from keras.models import load_model
 from multiprocessing import Queue, Pool, Process
 import h5py
 
@@ -34,9 +35,10 @@ os.chdir("./faceid")
 import facenet
 import detect_face
 from timer import Timer
-from face import facefile_detection, single_compare, single_recognition, baseid_import
+from face import facefile_detection, single_compare, single_recognition, baseid_import, alive_detection
 model_file = "models/models.pb"
 emb_h5 = "models/embeddings.h5"
+face_vgg = "models/face_vgg16.h5"
 http_server = "http://facefiles.sg-ai.com/"
 # http_server = "http://192.168.199.107:8000/"
 
@@ -179,32 +181,39 @@ class ImJoyPlugin():
     # 关键点检测
     async def predictIV(self, args):
         print(args)
-        win = await api.createWindow({
-            'name': 'ResultWindow',
-            'type': 'ResultWindow',
-            'w': 10, 'h': 10,
-            'data': {'fileName': '', 'keyPoint': ''}
-        })
-        i = 1
-        while i <= 1000:
-            win.run({'function': 'FunctionIV',
-                     'data': {'fileName': 'cat.jpg', 'keyPoint': '[{x: 1, y: 1}, {x2: 2, y2: 2}]'}})
-            i += 1
+
+        # win = await api.createWindow({
+        #     'name': 'ResultWindow',
+        #     'type': 'ResultWindow',
+        #     'w': 10, 'h': 10,
+        #     'data': {'fileName': '', 'keyPoint': ''}
+        # })
+
+        # win.run({'function': 'FunctionIV',
+        #          'data': {'fileName': 'cat.jpg', 'keyPoint': '[{x: 1, y: 1}, {x2: 2, y2: 2}]'}})
         return '1'
 
     # 活体检测
     async def predictV(self, args):
         print(args)
+        input_dir = args[0]["path"]
+        model = load_model(face_vgg)
+        image_files = os.listdir(input_dir)
+        image_files.sort()
+
         win = await api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
             'w': 10, 'h': 10,
             'data': {'fileName': '', 'flag': ''}
         })
-        i = 1
-        while i <= 1000:
-            win.run({'function': 'FunctionV', 'data': {'fileName': 'cat.jpg', 'flag': '否'}})
-            i += 1
+
+        for img in image_files:
+            flag = alive_detection(os.path.join(input_dir, img), model)
+
+            data_dict = {'fileName': img, 'flag': flag}
+            print(data_dict)
+            win.run({'function': 'FunctionIII', 'data': data_dict})
         return '1'
 
     # 图像质量检测
