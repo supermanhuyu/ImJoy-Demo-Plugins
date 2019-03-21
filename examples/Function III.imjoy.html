@@ -25,7 +25,7 @@
 let fileSelect = null
 let fileElem = null
 let fileList= null
-let uploadUrl = 'http://facefiles.sg-ai.com/file_upload'
+let uploadUrl = 'https://facefiles.sg-ai.com/file_upload'
 let args = []
 let predictResult = null
 class ImJoyPlugin {
@@ -71,10 +71,10 @@ class ImJoyPlugin {
         console.log(res)
     })
 
-    let importNegative = document.getElementById('importNegative')
-    importNegative.addEventListener('click', async event => {
+    let importBaseid = document.getElementById('importBaseid')
+    importBaseid.addEventListener('click', async event => {
         console.log(args)
-        let res = await api.call('PythonServer', 'importNegative', args)
+        let res = await api.call('PythonServer', 'importBaseid', args)
         console.log(res)
         predictResult.innerHTML = 'import negative success!'
     })
@@ -125,7 +125,7 @@ api.export(new ImJoyPlugin())
         <a href="#" id="fileSelect">Select file</a>&nbsp;&nbsp;&nbsp;&nbsp;
         <a href="#" id="fileClear">Clear file</a>&nbsp;&nbsp;&nbsp;&nbsp;
         <a href="#" id="upload">Upload</a>&nbsp;&nbsp;&nbsp;&nbsp;
-        <a href="#" id="importNegative">ImportNegative</a>&nbsp;&nbsp;&nbsp;&nbsp;
+        <a href="#" id="importBaseid">importBaseid</a>&nbsp;&nbsp;&nbsp;&nbsp;
         <a href="#" id="predict">Predict</a>&nbsp;&nbsp;&nbsp;&nbsp;
         <br>
         <div id="fileList">

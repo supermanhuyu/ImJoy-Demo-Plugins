@@ -17,6 +17,7 @@ Describe your plugin here.
   "icon": "extension",
   "env": "",
   "requirements": [],
+  "runnable": false,
   "dependencies": ["supermanhuyu/ImJoy-Demo-Plugins:ResultWindow",
   "https://github.com/supermanhuyu/ImJoy-Demo-Plugins/blob/master/examples/Function%20I.imjoy.html",
   "https://github.com/supermanhuyu/ImJoy-Demo-Plugins/blob/master/examples/Function%20II.imjoy.html",
@@ -44,12 +45,14 @@ from face import facefile_detection, single_compare, single_recognition, baseid_
 model_file = "models/models.pb"
 emb_h5 = "models/embeddings.h5"
 face_vgg = "models/face_vgg16.h5"
-http_server = "http://facefiles.sg-ai.com/"
+http_server = "https://facefiles.sg-ai.com/"
 # http_server = "http://192.168.199.107:8000/"
 
 class ImJoyPlugin():
     def setup(self):
         print('setup in python')
+        self.class_name = None
+        self.emb_arr = None
 
     def run(self):
         print('starting server ... ')
@@ -107,7 +110,7 @@ class ImJoyPlugin():
                     flag = "是"
                 else:
                     flag = "否"
-                # print('ID:', compare_dir, "dist:", dist, "flag:", flag, "time:", detect_timer.diff)
+                print('ID:', compare_dir, "dist:", dist, "flag:", flag, "time:", detect_timer.diff)
                 if wait is not None:
                     await wait
                 wait = win.run({
@@ -117,21 +120,41 @@ class ImJoyPlugin():
 
 
     # 1:n人脸识别 导入底库
-    async def importNegative(self, args):
+    async def importBaseid(self, args):
         print('data path:', args[0]["path"])
-        return baseid_import(args[0]["path"])
+        if baseid_import(args[0]["path"]):
+            f = h5py.File(emb_h5, 'r')
+            class_arr = f['class_name'][:]
+            self.class_name = [k.decode() for k in class_arr]
+            self.emb_arr = f['embeddings'][:]
+            f.close()
+            return True
+        else:
+            return False
 
     # 1:n人脸识别 预测
     async def predictIII(self, args):
         print(args)
         input_dir = args[0]["path"]
+        image_files = os.listdir(input_dir)
         output_dir = "data/result/"
         detect_timer = Timer()
 
-        f = h5py.File(emb_h5, 'r')
-        class_arr = f['class_name'][:]
-        class_name = [k.decode() for k in class_arr]
-        emb_arr = f['embeddings'][:]
+        # f = h5py.File(emb_h5, 'r')
+        # class_arr = f['class_name'][:]
+        # class_name = [k.decode() for k in class_arr]
+        # emb_arr = f['embeddings'][:]
+        # f.close()
+        if self.class_name is not None:
+            class_name = self.class_name
+            emb_arr = self.emb_arr
+        else:
+            f = h5py.File(emb_h5, 'r')
+            class_arr = f['class_name'][:]
+            class_name = [k.decode() for k in class_arr]
+            emb_arr = f['embeddings'][:]
+            f.close()
+
         # print("class_name: ", class_name)
 
         with tf.Graph().as_default():
@@ -152,16 +175,14 @@ class ImJoyPlugin():
                 'w': 10, 'h': 10,
                 'data': {'fileName': '', 'flag': '是', 'time': '0s', 'message': ''}
             })
-
-            image_files = os.listdir(input_dir)
             wait = None
+
             for img in image_files:
                 detect_timer.tic()
                 save_img, img_id = single_recognition(input_dir, img, output_dir, emb_arr, class_name,
                                                       pnet, rnet, onet,
                                                       images_placeholder, embeddings, phase_train_placeholder, sess)
                 detect_timer.toc()
-
                 flag = "是"
                 message = ""
                 if save_img == "none":
@@ -169,7 +190,6 @@ class ImJoyPlugin():
                     message = "没有人脸"
                 elif img_id == "none":
                     flag = "否"
-
                 data_dict = {'fileName': img,
                              'flag': flag,
                              'time': detect_timer.diff,
@@ -211,7 +231,6 @@ class ImJoyPlugin():
             'w': 10, 'h': 10,
             'data': {'fileName': '', 'flag': ''}
         })
-
         wait = None
         for img in image_files:
             flag = alive_detection(os.path.join(input_dir, img), model)
@@ -226,22 +245,21 @@ class ImJoyPlugin():
     # 图像质量检测
     async def predictVI(self, args):
         print(args)
-        win = await api.createWindow({
-            'name': 'ResultWindow',
-            'type': 'ResultWindow',
-            'w': 10, 'h': 10,
-            'data': {'fileName': '', 'message': ''}
-        })
-        i = 1
-        while i <= 25:
-            win.run({'function': 'FunctionVI', 'data': {'fileName': 'cat.jpg', 'message': '图像模糊,详细描述...'}})
-            i += 1
+        # win = await api.createWindow({
+        #     'name': 'ResultWindow',
+        #     'type': 'ResultWindow',
+        #     'w': 10, 'h': 10,
+        #     'data': {'fileName': '', 'message': ''}
+        # })
+        # i = 1
+        # while i <= 25:
+        #     win.run({'function': 'FunctionVI', 'data': {'fileName': 'cat.jpg', 'message': '图像模糊,详细描述...'}})
+        #     i += 1
         return '1'
 
 
     def exit(self):
         print('aborting servers...')
-        # self.upload_server_stop()
         print('aborted...')
 
 
