@@ -1,4 +1,4 @@
-﻿<docs lang="markdown">
+<docs lang="markdown">
     [TODO: write documentation for this plugin.]
 </docs>
 <config lang="json">
@@ -27,7 +27,7 @@
     let fileSelect = null
 let fileElem = null
 let fileList= null
-let uploadUrl = 'http://192.168.199.172:3000/file_upload'
+let uploadUrl = 'https://facefiles.sg-ai.com/file_upload'
 let args = []
 let loading = document.getElementById('loading')
 let text = document.getElementById('text')
@@ -46,19 +46,26 @@ class ImJoyPlugin {
             const list = document.createElement("div");
             fileList.appendChild(list);
             for (let i = 0; i < files.length; i++) {
-                const li = document.createElement("div");
-                list.appendChild(li);
+                const container = document.createElement("div");
+                container.style.display = "flex"
+                container.style.marginBottom = "10px"
+                list.appendChild(container);
 
+                const divImg = document.createElement("div");
                 const img = document.createElement("img");
                 img.src = window.URL.createObjectURL(files[i]);
                 img.height = 200;
                 img.onload = function() {
                     window.URL.revokeObjectURL(this.src);
                 }
-                li.appendChild(img);
-                const info = document.createElement("span");
-                info.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;' + files[i].name;
-                li.appendChild(info);
+                divImg.appendChild(img);
+                container.appendChild(divImg);
+
+
+                const info = document.createElement("div");
+                info.innerHTML = files[i].name;
+                info.style.paddingLeft = "10px"
+                container.appendChild(info);
             }
         }
     }
@@ -102,19 +109,37 @@ class ImJoyPlugin {
             const list = document.createElement("div");
                 predictResult.appendChild(list);
                 for (let i = 0; i < res.length; i++) {
-                    const li = document.createElement("div");
-                    list.appendChild(li);
+                    const container = document.createElement("div");
+                    container.style.display = "flex"
+                    container.style.marginBottom = "10px"
+                    list.appendChild(container);
 
+                    const divImg = document.createElement("div");
                     const img = document.createElement("img");
                     img.src = res[i].predictUrl
-                    img.height = 100;
+                    img.height = 200;
                     img.onload = function() {
                         window.URL.revokeObjectURL(this.src);
                     }
-                    li.appendChild(img);
-                    const info = document.createElement("span");
-                    info.innerHTML ='&nbsp;&nbsp;&nbsp;&nbsp;' +  res[i].fileName + " ;  IOU: " + res[i].IOU + " ; " + res[i].message;
-                    li.appendChild(info);
+                    divImg.appendChild(img);
+                    container.appendChild(divImg);
+
+                    const info = document.createElement("div");
+                    const p1 = document.createElement("p")
+                    p1.innerHTML = res[i].fileName
+                    info.style.paddingLeft = "10px"
+                    info.appendChild(p1)
+
+                    const p2 = document.createElement("p")
+                    p2.innerHTML = "IOU: " + res[i].IOU
+                    info.style.paddingLeft = "10px"
+                    info.appendChild(p2)
+
+                    const p3 = document.createElement("p")
+                    p3.innerHTML = res[i].message
+                    info.style.paddingLeft = "10px"
+                    info.appendChild(p3)
+                    container.appendChild(info);
                 }
         }
     })
