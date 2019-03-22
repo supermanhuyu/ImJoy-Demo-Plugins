@@ -3,7 +3,7 @@
 </docs>
 <config lang="json">
     {
-    "name": "FI",
+    "name": "Function I",
     "type": "window",
     "tags": [],
     "ui": "",
@@ -32,8 +32,6 @@ let args = []
 let loading = document.getElementById('loading')
 let text = document.getElementById('text')
 var modal = document.getElementById('myModal');
-// console.log('re ', modal)
-// var img = document.getElementById('myImg');
 var modalImg = document.getElementById("img01");
 class ImJoyPlugin {
   async setup() {
@@ -100,11 +98,6 @@ class ImJoyPlugin {
         text.innerHTML = '检测结束!'
         if (res && res.length > 0) {
             console.log('predict: ', res)
-            // let h2 = document.createElement('h2')
-            // h2.innerHTML = 'predict result'
-            // let hr = document.createElement('hr')
-            // predictResult.appendChild(hr)
-            // predictResult.appendChild(h2)
 
             const list = document.createElement("div");
                 predictResult.appendChild(list);
@@ -118,11 +111,6 @@ class ImJoyPlugin {
                     img.onload = function() {
                         window.URL.revokeObjectURL(this.src);
                     }
-                    // img.onclick = function () {
-                    //     modal.style.display = "block";
-                    //     modalImg.className = "modal-content"
-                    //     modalImg.src = this.src
-                    // }
                     li.appendChild(img);
                     const info = document.createElement("span");
                     info.innerHTML ='&nbsp;&nbsp;&nbsp;&nbsp;' +  res[i].fileName + " ;  IOU: " + res[i].IOU + " ; " + res[i].message;
@@ -166,31 +154,6 @@ class ImJoyPlugin {
         }
     })
 
-    // img
-    // var modal = document.getElementById('myModal');
-
-    // var img = document.getElementById('myImg');
-    // var modalImg = document.getElementById("img01");
-    // img.onclick = function() {
-    //     modal.style.display = "block";
-    //     modalImg.className = "modal-content"
-    //     modalImg.src = this.src
-    // }
-
-    // function imgClick (e) {
-    //   console.log('this: ', e)
-    //   modal.style.display = "block";
-    //     modalImg.className = "modal-content"
-    //     modalImg.src = e.src;
-    // }
-
-    // var span = document.getElementsByClassName("modal")[0];
-    // span.onclick = function() {
-    //     modalImg.className = "modal-content-zoom-out"
-    //     setTimeout(function () {
-    //         modal.style.display = "none";
-    //     }, 380)
-    // }
   }
 }
 
