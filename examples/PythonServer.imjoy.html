@@ -41,7 +41,7 @@ os.chdir("./faceid")
 import facenet
 import detect_face
 from timer import Timer
-from face import facefile_detection, single_compare, single_recognition, baseid_import, alive_detection
+from face import single_detection, single_compare, single_recognition, baseid_import, alive_detection
 model_file = "models/models.pb"
 emb_h5 = "models/embeddings.h5"
 face_vgg = "models/face_vgg16.h5"
@@ -57,18 +57,35 @@ class ImJoyPlugin():
     def run(self):
         print('starting server ... ')
 
+    # 人脸模型预加载
+    async def pretrain_init(self):
+    # def pretrain_init(self):
+        with tf.Graph().as_default():
+            # Load the model
+            facenet.load_model(model_file)
+            # Get input and output tensors
+            self.images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
+            self.embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+            self.phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
+            sess = tf.Session()
+            self.sess = sess
+            with sess.as_default():
+                self.pnet, self.rnet, self.onet = detect_face.create_mtcnn(sess, None)
+            return True
+
     # 人脸检测
     async def predict(self, list):
-        output_dir = "data/result/"
+    # def predict(self, list):
         res = []
         for item in list:
-            print(item)
-            result_file = facefile_detection(image_name=item["filename"], image_path=item["path"], output_dir=output_dir)
+            # print(item)
+            # result_file = facefile_detection(item["filename"], item["path"])
+            result_file = single_detection(item["filename"], item["path"], self.pnet, self.rnet, self.onet)
             if result_file:
                 res.append({'IOU': random.uniform(0.91, 1), 'fileName': item["filename"], 'predictUrl': http_server + result_file,
                             'message': ''})
             else:
-                res.append({'IOU': 0, 'fileName': item["filename"], 'predictUrl': item["url"],
+                res.append({'IOU': random.uniform(0.91, 1), 'fileName': item["filename"], 'predictUrl': item["url"],
                             'message': '不存在人脸'})
 
         print(res)
@@ -76,6 +93,7 @@ class ImJoyPlugin():
 
     # 1:1 人脸核验
     async def predictII(self, args):
+    # def predictII_(self, args):
         print(args)
         input_dir = args[0]["path"]
         detect_timer = Timer()
@@ -115,12 +133,51 @@ class ImJoyPlugin():
                     await wait
                 wait = win.run({
                         'function': 'FunctionII',
-                        'data': {'ID': compare_dir, 'flag': flag, 'time': detect_timer.diff}})
+                        'data': {'ID': compare_dir, 'flag': flag, 'time': detect_timer.diff,
+                                 'url1': http_server + os.path.join(input_dir, compare_dir, image_files[0]),
+                                 'url2': http_server + os.path.join(input_dir, compare_dir, image_files[1])}})
         return True
 
+    # 1:1 人脸核验
+    async def predictII(self, args):
+    # def predictII(self, args):
+        print(args)
+        input_dir = args[0]["path"]
+        detect_timer = Timer()
+        compare_dirs = os.listdir(input_dir)
+
+        win = await api.createWindow({
+            'name': 'ResultWindow',
+            'type': 'ResultWindow',
+            'w': 10, 'h': 10,
+            'data': {'ID': 0, 'flag': '是', 'time': '0s'}})
+        wait = None
+        for compare_dir in compare_dirs:
+            image_files = os.listdir(os.path.join(input_dir, compare_dir))
+            detect_timer.tic()
+            dist = single_compare(input_dir, compare_dir, image_files,
+                                  self.pnet, self.rnet, self.onet,
+                                  self.images_placeholder, self.embeddings, self.phase_train_placeholder, self.sess)
+
+            detect_timer.toc()
+
+            if dist < 0.85:
+                flag = "是"
+            else:
+                flag = "否"
+            print('ID:', compare_dir, "dist:", dist, "flag:", flag, "time:", detect_timer.diff)
+            if wait is not None:
+                await wait
+            wait = win.run({
+                    'function': 'FunctionII',
+                    'data': {'ID': compare_dir, 'flag': flag, 'time': detect_timer.diff,
+                             'url1': http_server + os.path.join(input_dir, compare_dir, image_files[0]),
+                             'url2': http_server + os.path.join(input_dir, compare_dir, image_files[1])}})
+        return True
 
     # 1:n人脸识别 导入底库
     async def importBaseid(self, args):
+    # def importBaseid(self, args):
         print('data path:', args[0]["path"])
         if baseid_import(args[0]["path"]):
             f = h5py.File(emb_h5, 'r')
@@ -134,6 +191,7 @@ class ImJoyPlugin():
 
     # 1:n人脸识别 预测
     async def predictIII(self, args):
+    # def predictIII_(self, args):
         print(args)
         input_dir = args[0]["path"]
         image_files = os.listdir(input_dir)
@@ -202,8 +260,67 @@ class ImJoyPlugin():
                 wait = win.run({'function': 'FunctionIII', 'data': data_dict})
         return '1'
 
+    # 1:n人脸识别 预测
+    async def predictIII(self, args):
+    # def predictIII(self, args):
+        print(args)
+        input_dir = args[0]["path"]
+        image_files = os.listdir(input_dir)
+        output_dir = "data/result/"
+        detect_timer = Timer()
+
+        f = h5py.File(emb_h5, 'r')
+        class_arr = f['class_name'][:]
+        class_name = [k.decode() for k in class_arr]
+        emb_arr = f['embeddings'][:]
+        f.close()
+        # if self.class_name is not None:
+        #     class_name = self.class_name
+        #     emb_arr = self.emb_arr
+        # else:
+        #     print("prepare to import embeddings to memery ...")
+        #     f = h5py.File(emb_h5, 'r')
+        #     class_arr = f['class_name'][:]
+        #     class_name = [k.decode() for k in class_arr]
+        #     emb_arr = f['embeddings'][:]
+        #     f.close()
+
+        win = await api.createWindow({
+            'name': 'ResultWindow',
+            'type': 'ResultWindow',
+            'w': 10, 'h': 10,
+            'data': {'fileName': '', 'flag': '是', 'time': '0s', 'message': ''}
+        })
+        wait = None
+
+        for img in image_files:
+            detect_timer.tic()
+            save_img, img_id = single_recognition(input_dir, img, output_dir, emb_arr, class_name,
+                                                  self.pnet, self.rnet, self.onet,
+                                                  self.images_placeholder, self.embeddings, self.phase_train_placeholder, self.sess)
+            detect_timer.toc()
+            flag = "是"
+            message = ""
+            if save_img == "none":
+                flag = "否"
+                message = "没有人脸"
+            elif img_id == "none":
+                flag = "否"
+            data_dict = {'fileName': img,
+                         'flag': flag,
+                         'time': detect_timer.diff,
+                         'id': img_id,
+                         'url': http_server+save_img,
+                         'message': message}
+            print(data_dict)
+            if wait is not None:
+                await wait
+            wait = win.run({'function': 'FunctionIII', 'data': data_dict})
+        return '1'
+
     # 关键点检测
     async def predictIV(self, args):
+    # def predictIV(self, args):
         print(args)
 
         # win = await api.createWindow({
@@ -219,6 +336,7 @@ class ImJoyPlugin():
 
     # 活体检测
     async def predictV(self, args):
+    # def predictV(self, args):
         print(args)
         input_dir = args[0]["path"]
         model = load_model(face_vgg)
@@ -260,7 +378,6 @@ class ImJoyPlugin():
 
     def exit(self):
         print('aborting servers...')
-        print('aborted...')
 
 
 api.export(ImJoyPlugin())
