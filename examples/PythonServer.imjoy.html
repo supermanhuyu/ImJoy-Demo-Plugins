@@ -68,7 +68,7 @@ class ImJoyPlugin():
                 res.append({'IOU': random.uniform(0.91, 1), 'fileName': item["filename"], 'predictUrl': http_server + result_file,
                             'message': ''})
             else:
-                res.append({'IOU': random.uniform(0.91, 1), 'fileName': item["filename"], 'predictUrl': http_server + result_file,
+                res.append({'IOU': 0, 'fileName': item["filename"], 'predictUrl': item["url"],
                             'message': '不存在人脸'})
 
         print(res)
