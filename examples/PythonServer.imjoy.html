@@ -53,13 +53,14 @@ class ImJoyPlugin():
         print('setup in python')
         self.class_name = None
         self.emb_arr = None
+        self.pretrain_init()
+        print('pretrain_init finished.')
 
     def run(self):
         print('starting server ... ')
 
     # 人脸模型预加载
-    async def pretrain_init(self):
-    # def pretrain_init(self):
+    def pretrain_init(self):
         with tf.Graph().as_default():
             # Load the model
             facenet.load_model(model_file)
