@@ -313,7 +313,7 @@ class ImJoyPlugin():
         for img in image_files:
             flag = alive_detection(os.path.join(input_dir, img), model)
 
-            data_dict = {'fileName': img, 'flag': flag, 'url1': ''}
+            data_dict = {'fileName': img, 'flag': flag, 'url1': http_server+os.path.join(input_dir, img)}
             print(data_dict)
             if wait is not None:
                 await wait
