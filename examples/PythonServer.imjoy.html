@@ -37,7 +37,6 @@ import numpy as np
 from scipy import misc
 import tensorflow as tf
 from keras.models import load_model
-from multiprocessing import Queue, Pool, Process
 import h5py
 os.chdir("./faceid")
 import facenet
@@ -138,17 +137,7 @@ class ImJoyPlugin():
 
     # 1:n人脸识别 导入底库
     async def importBaseid(self, args):
-    # # def importBaseid(self, args):
-    #     print('data path:', args[0]["path"])
-    #     if baseid_import(args[0]["path"]):
-    #         f = h5py.File(emb_h5, 'r')
-    #         class_arr = f['class_name'][:]
-    #         self.class_name = [k.decode() for k in class_arr]
-    #         self.emb_arr = f['embeddings'][:]
-    #         f.close()
-    #         return True
-    #     else:
-    #         return False
+    # def importBaseid(self, args):
         win = await api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
@@ -222,11 +211,15 @@ class ImJoyPlugin():
         f.create_dataset('embeddings', data=embs_all)
         f.create_dataset('mean', data=np.mean(embs_all, axis=0))
         f.close()
-
         if os.path.exists(h5_embs):
             os.remove(h5_embs)
         shutil.copyfile(h5_embs_bak, h5_embs)
+
+        self.class_name = class_name
+        self.emb_arr = embs_all
+        self.mean = np.mean(embs_all, axis=0)
         print("success load faceid num: ", len(class_name))
+        return True
 
 
     # 1:n人脸识别 预测
@@ -238,21 +231,18 @@ class ImJoyPlugin():
         output_dir = "data/result/"
         detect_timer = Timer()
 
-        f = h5py.File(emb_h5, 'r')
-        class_arr = f['class_name'][:]
-        class_name = [k.decode() for k in class_arr]
-        emb_arr = f['embeddings'][:]
-        f.close()
-        # if self.class_name is not None:
-        #     class_name = self.class_name
-        #     emb_arr = self.emb_arr
-        # else:
-        #     print("prepare to import embeddings to memery ...")
-        #     f = h5py.File(emb_h5, 'r')
-        #     class_arr = f['class_name'][:]
-        #     class_name = [k.decode() for k in class_arr]
-        #     emb_arr = f['embeddings'][:]
-        #     f.close()
+        if self.class_name is not None:
+            class_name = self.class_name
+            emb_arr = self.emb_arr
+            mean = self.mean
+        else:
+            print("prepare to import embeddings to memery ...")
+            f = h5py.File(emb_h5, 'r')
+            class_arr = f['class_name'][:]
+            class_name = [k.decode() for k in class_arr]
+            emb_arr = f['embeddings'][:]
+            mean = f['mean'][:]
+            f.close()
 
         win = await api.createWindow({
             'name': 'ResultWindow',
@@ -264,7 +254,7 @@ class ImJoyPlugin():
 
         for img in image_files:
             detect_timer.tic()
-            save_img, img_id = single_recognition(input_dir, img, output_dir, emb_arr, class_name,
+            save_img, img_id = single_recognition(input_dir, img, output_dir, emb_arr, class_name, mean,
                                                   self.pnet, self.rnet, self.onet,
                                                   self.images_placeholder, self.embeddings, self.phase_train_placeholder, self.sess)
             detect_timer.toc()
