@@ -31,8 +31,10 @@ Describe your plugin here.
 <script lang="python">
 import os
 import time
+import shutil
 import random
 import numpy as np
+from scipy import misc
 import tensorflow as tf
 from keras.models import load_model
 from multiprocessing import Queue, Pool, Process
@@ -41,7 +43,7 @@ os.chdir("./faceid")
 import facenet
 import detect_face
 from timer import Timer
-from face import single_detection, single_compare, single_recognition, baseid_import, alive_detection
+from face import single_detection, single_compare, single_recognition, alive_detection, face_align, face_align_single
 model_file = "models/models.pb"
 emb_h5 = "models/embeddings.h5"
 face_vgg = "models/face_vgg16.h5"
@@ -53,6 +55,7 @@ class ImJoyPlugin():
         print('setup in python')
         self.class_name = None
         self.emb_arr = None
+        self.mean = None
         self.pretrain_init()
         print('pretrain_init finished.')
 
@@ -94,53 +97,6 @@ class ImJoyPlugin():
 
     # 1:1 人脸核验
     async def predictII(self, args):
-    # def predictII_(self, args):
-        print(args)
-        input_dir = args[0]["path"]
-        detect_timer = Timer()
-        with tf.Graph().as_default():
-            # Load the model
-            facenet.load_model(model_file)
-            # Get input and output tensors
-            images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
-            embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
-            phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
-
-            sess = tf.Session()
-            with sess.as_default():
-                pnet, rnet, onet = detect_face.create_mtcnn(sess, None)
-            compare_dirs = os.listdir(input_dir)
-
-            win = await api.createWindow({
-                'name': 'ResultWindow',
-                'type': 'ResultWindow',
-                'w': 10, 'h': 10,
-                'data': {'ID': 0, 'flag': '是', 'time': '0s'}})
-            wait = None
-            for compare_dir in compare_dirs:
-                image_files = os.listdir(os.path.join(input_dir, compare_dir))
-                detect_timer.tic()
-                dist = single_compare(input_dir, compare_dir, image_files,
-                               pnet, rnet, onet, images_placeholder, embeddings, phase_train_placeholder, sess)
-
-                detect_timer.toc()
-
-                if dist < 0.85:
-                    flag = "是"
-                else:
-                    flag = "否"
-                print('ID:', compare_dir, "dist:", dist, "flag:", flag, "time:", detect_timer.diff)
-                if wait is not None:
-                    await wait
-                wait = win.run({
-                        'function': 'FunctionII',
-                        'data': {'ID': compare_dir, 'flag': flag, 'time': detect_timer.diff,
-                                 'url1': http_server + os.path.join(input_dir, compare_dir, image_files[0]),
-                                 'url2': http_server + os.path.join(input_dir, compare_dir, image_files[1])}})
-        return True
-
-    # 1:1 人脸核验
-    async def predictII(self, args):
     # def predictII(self, args):
         print(args)
         input_dir = args[0]["path"]
@@ -151,7 +107,7 @@ class ImJoyPlugin():
             'name': 'ResultWindow',
             'type': 'ResultWindow',
             'w': 10, 'h': 10,
-            'data': {'ID': 0, 'flag': '是', 'time': '0s'}})
+            'data': {'ID': 0, 'flag': '是', 'time': '0s', 'url1': '', 'url2': ''}})
         wait = None
         for compare_dir in compare_dirs:
             image_files = os.listdir(os.path.join(input_dir, compare_dir))
@@ -178,20 +134,98 @@ class ImJoyPlugin():
 
     # 1:n人脸识别 导入底库
     async def importBaseid(self, args):
-    # def importBaseid(self, args):
-        print('data path:', args[0]["path"])
-        if baseid_import(args[0]["path"]):
-            f = h5py.File(emb_h5, 'r')
-            class_arr = f['class_name'][:]
-            self.class_name = [k.decode() for k in class_arr]
-            self.emb_arr = f['embeddings'][:]
-            f.close()
-            return True
+    # # def importBaseid(self, args):
+    #     print('data path:', args[0]["path"])
+    #     if baseid_import(args[0]["path"]):
+    #         f = h5py.File(emb_h5, 'r')
+    #         class_arr = f['class_name'][:]
+    #         self.class_name = [k.decode() for k in class_arr]
+    #         self.emb_arr = f['embeddings'][:]
+    #         f.close()
+    #         return True
+    #     else:
+    #         return False
+        win = await api.createWindow({
+            'name': 'ResultWindow',
+            'type': 'ResultWindow',
+            'w': 40,
+            'h': 15,
+            'data': {
+                'index': 0,
+                'fileName': ''
+            }
+        })
+
+        base_dir = args[0]["path"]
+        h5_embs = "models/embeddings.h5"
+        files_list = os.listdir(base_dir)
+        if os.path.isdir(os.path.join(base_dir, files_list[0])):
+            class_name = files_list
+            class_name.sort()
+            embs_all = None
+            detect_timer = Timer()
+            for id_name in class_name:
+                detect_timer.tic()
+                # 每个ID下面的file list
+                idx_dir = os.path.join(base_dir, id_name)
+                img_list = face_align(idx_dir, self.pnet, self.rnet, self.onet)
+                images = np.stack(img_list)
+                # Run forward pass to calculate embeddings
+                feed_dict = {self.images_placeholder: images, self.phase_train_placeholder: False}
+                embs_list = self.sess.run(self.embeddings, feed_dict=feed_dict)
+                embs = np.mean(embs_list, axis=0)[np.newaxis, :]
+
+                if embs_all is not None:
+                    embs_all = np.append(embs_all, embs, axis=0)
+                else:
+                    embs_all = embs
+
+                detect_timer.toc()
+                print('import ID: {} ,  time cost: {:.3f}s'.format(id_name, detect_timer.diff))
+                win.run({'function': 'importBaseid', 'data': {'index': id_name, 'fileName': id_name}})
+        elif os.path.isfile(os.path.join(base_dir, files_list[0])):
+            # img_list = []
+            class_name = []
+            embs_all = None
+            detect_timer = Timer()
+            for idx_name in files_list:
+                detect_timer.tic()
+                prewhitened = face_align_single(base_dir, idx_name, self.pnet, self.rnet, self.onet)
+                # img_list.append(prewhitened)
+                id_name = os.path.splitext(idx_name)[0]
+                class_name.append(id_name)
+                images = np.stack([prewhitened])
+                feed_dict = {self.images_placeholder: images, self.phase_train_placeholder: False}
+                embs = self.sess.run(self.embeddings, feed_dict=feed_dict)
+
+                if embs_all is not None:
+                    embs_all = np.append(embs_all, embs, axis=0)
+                else:
+                    embs_all = embs
+
+                detect_timer.toc()
+                print('import ID: {} ,  time cost: {:.3f}s'.format(id_name, detect_timer.diff))
+                win.run({'function': 'importBaseid', 'data': {'index': id_name, 'fileName': idx_name}})
+
         else:
+            print("import base id directory error.")
             return False
+        h5_embs_bak = h5_embs.replace("embeddings",
+                                      "embeddings_" + time.strftime("%Y%m%d%H%M%S", time.localtime()))
+        f = h5py.File(h5_embs_bak, 'w')
+        class_arr = [i.encode() for i in class_name]
+        f.create_dataset('class_name', data=class_arr)
+        f.create_dataset('embeddings', data=embs_all)
+        f.create_dataset('mean', data=np.mean(embs_all, axis=0))
+        f.close()
+
+        if os.path.exists(h5_embs):
+            os.remove(h5_embs)
+        shutil.copyfile(h5_embs_bak, h5_embs)
+        print("success load faceid num: ", len(class_name))
 
     # 1:n人脸识别 预测
-    async def predictIII(self, args):
+    async def predictIII_(self, args):
     # def predictIII_(self, args):
         print(args)
         input_dir = args[0]["path"]
@@ -207,11 +241,13 @@ class ImJoyPlugin():
         if self.class_name is not None:
             class_name = self.class_name
             emb_arr = self.emb_arr
+            mean = self.mean
         else:
             f = h5py.File(emb_h5, 'r')
             class_arr = f['class_name'][:]
             class_name = [k.decode() for k in class_arr]
             emb_arr = f['embeddings'][:]
+            mean = f['mean'][:]
             f.close()
 
         # print("class_name: ", class_name)
@@ -232,13 +268,13 @@ class ImJoyPlugin():
                 'name': 'ResultWindow',
                 'type': 'ResultWindow',
                 'w': 10, 'h': 10,
-                'data': {'fileName': '', 'flag': '是', 'time': '0s', 'message': ''}
+                'data': {'fileName': '', 'flag': '是', 'time': '0s', 'message': '', 'url1': ''}
             })
             wait = None
 
             for img in image_files:
                 detect_timer.tic()
-                save_img, img_id = single_recognition(input_dir, img, output_dir, emb_arr, class_name,
+                save_img, img_id = single_recognition(input_dir, img, output_dir, emb_arr, class_name, mean,
                                                       pnet, rnet, onet,
                                                       images_placeholder, embeddings, phase_train_placeholder, sess)
                 detect_timer.toc()
@@ -290,7 +326,7 @@ class ImJoyPlugin():
             'name': 'ResultWindow',
             'type': 'ResultWindow',
             'w': 10, 'h': 10,
-            'data': {'fileName': '', 'flag': '是', 'time': '0s', 'message': ''}
+            'data': {'fileName': '', 'flag': '是', 'time': '0s', 'message': '', 'url1': ''}
         })
         wait = None
 
@@ -348,13 +384,13 @@ class ImJoyPlugin():
             'name': 'ResultWindow',
             'type': 'ResultWindow',
             'w': 10, 'h': 10,
-            'data': {'fileName': '', 'flag': ''}
+            'data': {'fileName': '', 'flag': '', 'url1': ''}
         })
         wait = None
         for img in image_files:
             flag = alive_detection(os.path.join(input_dir, img), model)
 
-            data_dict = {'fileName': img, 'flag': flag}
+            data_dict = {'fileName': img, 'flag': flag, 'url1': ''}
             print(data_dict)
             if wait is not None:
                 await wait
