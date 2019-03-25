@@ -17,7 +17,6 @@ Describe your plugin here.
   "icon": "extension",
   "env": "",
   "requirements": [],
-  "runnable": false,
   "dependencies": ["supermanhuyu/ImJoy-Demo-Plugins:ResultWindow",
   "https://github.com/supermanhuyu/ImJoy-Demo-Plugins/blob/master/examples/Function%20I.imjoy.html",
   "https://github.com/supermanhuyu/ImJoy-Demo-Plugins/blob/master/examples/Function%20II.imjoy.html",
@@ -52,14 +51,14 @@ http_server = "https://facefiles.sg-ai.com/"
 class ImJoyPlugin():
     def setup(self):
         print('setup in python')
+
+    def run(self):
+        print('starting server ... ')
         self.class_name = None
         self.emb_arr = None
         self.mean = None
         self.pretrain_init()
         print('pretrain_init finished.')
-
-    def run(self):
-        print('starting server ... ')
 
     # 人脸模型预加载
     def pretrain_init(self):
