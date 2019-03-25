@@ -108,7 +108,7 @@ class ImJoyPlugin():
         win = await api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
-            'w': 10, 'h': 10,
+            'w': 40, 'h': 15,
             'data': {'ID': 0, 'flag': '是', 'time': '0s', 'url1': '', 'url2': ''}})
         wait = None
         for compare_dir in compare_dirs:
@@ -246,7 +246,7 @@ class ImJoyPlugin():
         win = await api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
-            'w': 10, 'h': 10,
+            'w': 40, 'h': 15,
             'data': {'fileName': '', 'flag': '是', 'time': '0s', 'message': '', 'url1': ''}
         })
         wait = None
@@ -285,7 +285,7 @@ class ImJoyPlugin():
         # win = await api.createWindow({
         #     'name': 'ResultWindow',
         #     'type': 'ResultWindow',
-        #     'w': 10, 'h': 10,
+        #     'w': 40, 'h': 15,
         #     'data': {'fileName': '', 'keyPoint': ''}
         # })
 
@@ -305,7 +305,7 @@ class ImJoyPlugin():
         win = await api.createWindow({
             'name': 'ResultWindow',
             'type': 'ResultWindow',
-            'w': 10, 'h': 10,
+            'w': 40, 'h': 15,
             'data': {'fileName': '', 'flag': '', 'url1': ''}
         })
         wait = None
@@ -316,7 +316,7 @@ class ImJoyPlugin():
             print(data_dict)
             if wait is not None:
                 await wait
-            wait = win.run({'function': 'FunctionIII', 'data': data_dict})
+            wait = win.run({'function': 'FunctionV', 'data': data_dict})
         return True
 
     # 图像质量检测
@@ -325,7 +325,7 @@ class ImJoyPlugin():
         # win = await api.createWindow({
         #     'name': 'ResultWindow',
         #     'type': 'ResultWindow',
-        #     'w': 10, 'h': 10,
+        #     'w': 40, 'h': 15,
         #     'data': {'fileName': '', 'message': ''}
         # })
         # i = 1
