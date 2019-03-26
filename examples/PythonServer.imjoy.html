@@ -37,11 +37,13 @@ from scipy import misc
 import tensorflow as tf
 from keras.models import load_model
 import h5py
+import asyncio
 os.chdir("./faceid")
 import facenet
 import detect_face
 from timer import Timer
-from face import single_detection, single_compare, single_recognition, alive_detection, face_align, face_align_single
+from face import single_detection, single_compare, single_recognition, face_align, face_align_single
+from face import alive_detection, face_quality
 model_file = "models/models.pb"
 emb_h5 = "models/embeddings.h5"
 face_vgg = "models/face_vgg16.h5"
@@ -329,18 +331,70 @@ class ImJoyPlugin():
 
     # 图像质量检测
     async def predictVI(self, args):
+        '''
+        图像质量检测
+        模糊： blur， 0表示清晰，1表示模糊， 小于0.7
+        亮度： illumination，取值范围[0~255] 脸部光照的灰度值，0表示光照不好
+        遮挡： occlusion，0为无遮挡，1是完全遮挡
+        角度： rotation [-180,180]
+        '''
         print(args)
-        # win = await api.createWindow({
-        #     'name': 'ResultWindow',
-        #     'type': 'ResultWindow',
-        #     'w': 40, 'h': 15,
-        #     'data': {'fileName': '', 'message': ''}
-        # })
-        # i = 1
-        # while i <= 25:
-        #     win.run({'function': 'FunctionVI', 'data': {'fileName': 'cat.jpg', 'message': '图像模糊,详细描述...'}})
-        #     i += 1
-        return True
+        win = await api.createWindow({
+            'name': 'ResultWindow',
+            'type': 'ResultWindow',
+            'w': 40, 'h': 15,
+            'data': {'fileName': '', 'message': ''}
+        })
+        wait = None
+        if len(args) != 0 and type(args) is list:
+            for args_dict in args:
+                filename = args_dict["filename"]
+                url = args_dict["url"]
+                path = args_dict["path"]
+                result = face_quality(path)
+                time.sleep(0.6)
+                messages = ""
+                blur = "图片是否模糊： 正常"
+                rotation = "图片旋转角度值： 0"
+                illumination = "图片是否灰暗： 正常"
+                occlusion = "图片有无遮挡： 正常"
+                if result is not False:
+                    if result["blur"] > 0.7:
+                        messages = messages + "图片是否模糊： 模糊 ，模糊度: {} \n".format(result["blur"])
+                        blur = "图片是否模糊： 模糊 ，模糊度: {} \n".format(result["blur"])
+                    else:
+                        messages = messages + "图片是否模糊： 正常  \n"
+
+                    if result["illumination"] < 50:
+                        messages = messages + "图片是否灰暗， 灰暗，灰度值: {} \n".format(result["illumination"])
+                        illumination = "图片是否灰暗， 灰暗，灰度值: {} \n".format(result["illumination"])
+                    else:
+                        messages = messages + "图片是否灰暗： 正常  \n"
+
+                    if result["occlusion"] > 0.3:
+                        messages = messages + "图片有无遮挡， 遮挡，这档比例: {} % \n".format(result["occlusion"]*100)
+                        occlusion = "图片有无遮挡， 遮挡，这档比例: {} % \n".format(result["occlusion"]*100)
+                    else:
+                        messages = messages + "图片有无遮挡： 正常  \n"
+
+                    messages = messages + "图片旋转角度值： {} \n".format(result["rotation"])
+                    rotation = "图片旋转角度值： {} \n".format(result["rotation"])
+                else:
+                    messages = "没有检测到人脸"
+
+                if wait is not None:
+                    await wait
+                wait = win.run({'function': 'FunctionVI', 'data': {'fileName': filename,'url1': url,
+                                                                   'message': messages,
+                                                                   'blur': blur,
+                                                                   'illumination': illumination,
+                                                                   'occlusion': occlusion,
+                                                                   'rotation': rotation,}})
+        else:
+            print("args error : ")
+            print(args)
+            api.alert("args error :" + str(args))
+            return False
 
 
     def exit(self):
