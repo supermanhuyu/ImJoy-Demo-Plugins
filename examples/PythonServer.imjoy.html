@@ -59,6 +59,7 @@ class ImJoyPlugin():
         self.mean = None
         self.pretrain_init()
         print('pretrain_init finished.')
+        api.showStatus('init finished.')
 
     # 人脸模型预加载
     def pretrain_init(self):
@@ -156,7 +157,8 @@ class ImJoyPlugin():
             class_name.sort()
             embs_all = None
             detect_timer = Timer()
-            for id_name in class_name:
+            id_sum = len(class_name)
+            for index, id_name in enumerate(class_name, 1):
                 detect_timer.tic()
                 # 每个ID下面的file list
                 idx_dir = os.path.join(base_dir, id_name)
@@ -174,7 +176,7 @@ class ImJoyPlugin():
 
                 detect_timer.toc()
                 print('import ID: {} ,  time cost: {:.3f}s'.format(id_name, detect_timer.diff))
-                win.run({'function': 'importBaseid', 'data': {'index': id_name, 'fileName': id_name}})
+                win.run({'function': 'importBaseid', 'data': {'index': index, 'ID': id_name, 'id_sum': id_sum}})
         elif os.path.isfile(os.path.join(base_dir, files_list[0])):
             # img_list = []
             class_name = []
