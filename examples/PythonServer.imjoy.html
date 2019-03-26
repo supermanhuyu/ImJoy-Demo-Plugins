@@ -57,10 +57,10 @@ class ImJoyPlugin():
         self.class_name = None
         self.emb_arr = None
         self.mean = None
-        api.showStatus('start to init python server ... ')
+        api.showStatus('正在初始化服务 ... ')
         self.pretrain_init()
         print('pretrain_init finished.')
-        api.showStatus('init finished.')
+        api.showStatus('初始化完成 ')
 
     # 人脸模型预加载
     def pretrain_init(self):
@@ -154,6 +154,7 @@ class ImJoyPlugin():
         h5_embs = "models/embeddings.h5"
         files_list = os.listdir(base_dir)
         if os.path.isdir(os.path.join(base_dir, files_list[0])):
+            print("import id with multi image per base id. ")
             class_name = files_list
             class_name.sort()
             embs_all = None
@@ -179,6 +180,7 @@ class ImJoyPlugin():
                 print('import ID: {} ,  time cost: {:.3f}s'.format(id_name, detect_timer.diff))
                 win.run({'function': 'importBaseid', 'data': {'index': index, 'ID': id_name, 'id_sum': id_sum}})
         elif os.path.isfile(os.path.join(base_dir, files_list[0])):
+            print("import id with single image per base id. ")
             # img_list = []
             class_name = []
             embs_all = None
@@ -187,7 +189,7 @@ class ImJoyPlugin():
             for index, idx_name in enumerate(files_list, 1):
                 detect_timer.tic()
                 prewhitened = face_align_single(base_dir, idx_name, self.pnet, self.rnet, self.onet)
-                if not prewhitened:
+                if prewhitened is False:
                     continue
                 images = np.stack([prewhitened])
                 feed_dict = {self.images_placeholder: images, self.phase_train_placeholder: False}
