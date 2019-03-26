@@ -57,6 +57,7 @@ class ImJoyPlugin():
         self.class_name = None
         self.emb_arr = None
         self.mean = None
+        api.showStatus('start to init python server ... ')
         self.pretrain_init()
         print('pretrain_init finished.')
         api.showStatus('init finished.')
@@ -182,12 +183,12 @@ class ImJoyPlugin():
             class_name = []
             embs_all = None
             detect_timer = Timer()
-            for idx_name in files_list:
+            id_sum = len(files_list)
+            for index, idx_name in enumerate(files_list, 1):
                 detect_timer.tic()
                 prewhitened = face_align_single(base_dir, idx_name, self.pnet, self.rnet, self.onet)
-                # img_list.append(prewhitened)
-                id_name = os.path.splitext(idx_name)[0]
-                class_name.append(id_name)
+                if not prewhitened:
+                    continue
                 images = np.stack([prewhitened])
                 feed_dict = {self.images_placeholder: images, self.phase_train_placeholder: False}
                 embs = self.sess.run(self.embeddings, feed_dict=feed_dict)
@@ -198,8 +199,11 @@ class ImJoyPlugin():
                     embs_all = embs
 
                 detect_timer.toc()
+                id_name = os.path.splitext(idx_name)[0]
+                class_name.append(id_name)
                 print('import ID: {} ,  time cost: {:.3f}s'.format(id_name, detect_timer.diff))
-                win.run({'function': 'importBaseid', 'data': {'index': id_name, 'fileName': idx_name}})
+                # win.run({'function': 'importBaseid', 'data': {'index': id_name, 'fileName': idx_name}})
+                win.run({'function': 'importBaseid', 'data': {'index': index, 'ID': id_name, 'id_sum': id_sum}})
 
         else:
             print("import base id directory error.")
